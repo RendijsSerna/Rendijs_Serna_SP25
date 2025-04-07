@@ -114,34 +114,29 @@ ORDER BY number_of_rentals desc, title ASC
 LIMIT 5;
 
 --Which actors/actresses didn't act for a longer period of time than the others? V2
-WITH actor_film_years AS (
-    SELECT 
+WITH actor_years AS (
+    SELECT DISTINCT
         a.actor_id,
         a.first_name,
         a.last_name,
-        f.release_year,
-        ROW_NUMBER() OVER (PARTITION BY a.actor_id ORDER BY f.release_year DESC) as year_rank
+        f.release_year
     FROM actor a
     JOIN film_actor fa ON a.actor_id = fa.actor_id
     JOIN film f ON fa.film_id = f.film_id
-),
-last_two_films AS (
-    SELECT 
-        actor_id,
-        first_name,
-        last_name,
-        MAX(CASE WHEN year_rank = 1 THEN release_year END) AS last_film_year,
-        MAX(CASE WHEN year_rank = 2 THEN release_year END) AS second_last_film_year
-    FROM actor_film_years
-    WHERE year_rank <= 2
-    GROUP BY actor_id, first_name, last_name
 )
 SELECT 
-    first_name,
-    last_name,
-    last_film_year,
-    second_last_film_year,
-    (last_film_year - second_last_film_year) AS gap_years
-FROM last_two_films
-WHERE second_last_film_year IS NOT NULL
-ORDER BY gap_years DESC;
+    a1.first_name,
+    a1.last_name,
+    MAX(a2.release_year - a1.release_year) AS max_gap_years
+FROM actor_years a1
+JOIN actor_years a2 ON a1.actor_id = a2.actor_id
+WHERE a2.release_year > a1.release_year
+AND NOT EXISTS (
+    SELECT 1 FROM actor_years a3
+    WHERE a3.actor_id = a1.actor_id
+    AND a3.release_year > a1.release_year
+    AND a3.release_year < a2.release_year
+)
+GROUP BY a1.actor_id, a1.first_name, a1.last_name
+HAVING MAX(a2.release_year - a1.release_year) > 0
+ORDER BY max_gap_years DESC;
