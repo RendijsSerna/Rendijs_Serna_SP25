@@ -60,10 +60,11 @@ WITH insert_film AS (
     )
     RETURNING film_id
 )
+
 INSERT INTO inventory (film_id, store_id)
 SELECT 
     f.film_id, 
-    2 AS store_id 
+    (SELECT store_id FROM store ORDER BY RANDOM() LIMIT 1) AS store_id
 FROM insert_film f
 WHERE NOT EXISTS (
     SELECT 1 
@@ -74,6 +75,14 @@ RETURNING *;
 
 --Add the actors who play leading roles in your favorite movies to the 'actor' and 'film_actor' tables (6 or more actors in total).  Actors with the name Actor1, Actor2, etc - will not be taken into account and grade will be reduced.
 
+INSERT INTO actor (first_name, last_name)
+SELECT UPPER('Ryan'), UPPER('Reynolds') 
+WHERE NOT EXISTS (SELECT 1 FROM actor WHERE first_name = UPPER('Ryan') AND last_name = UPPER('Reynolds'));
+
+INSERT INTO actor (first_name, last_name)
+SELECT UPPER('Hugh'), UPPER('Jackman') 
+WHERE NOT EXISTS (SELECT 1 FROM actor WHERE first_name = UPPER('Hugh') AND last_name = UPPER('Jackman'));
+
 INSERT INTO film_actor (film_id, actor_id)
 SELECT 
     f.film_id,
@@ -81,8 +90,8 @@ SELECT
 FROM 
     film f
 JOIN
-    actor a ON (LOWER(a.last_name) IN ('reynolds', 'jackman') 
-               AND LOWER(a.first_name) IN ('ryan', 'hugh'))
+    actor a ON (a.last_name IN (UPPER('Reynolds'), UPPER('Jackman')) 
+               AND a.first_name IN (UPPER('Ryan'), UPPER('Hugh')))
 WHERE 
     f.title = UPPER('Deadpool & Wolverine')
     AND NOT EXISTS (
@@ -90,6 +99,16 @@ WHERE
         WHERE fa.film_id = f.film_id AND fa.actor_id = a.actor_id
 )
 RETURNING *;
+
+
+INSERT INTO actor (first_name, last_name)
+SELECT UPPER('Jim'), UPPER('Carrey') 
+WHERE NOT EXISTS (SELECT 1 FROM actor WHERE first_name = UPPER('Jim') AND last_name = UPPER('Carrey'));
+
+INSERT INTO actor (first_name, last_name)
+SELECT UPPER('Ben'), UPPER('Schwartz') 
+WHERE NOT EXISTS (SELECT 1 FROM actor WHERE first_name = UPPER('Ben') AND last_name = UPPER('Schwartz'));
+
 INSERT INTO film_actor (film_id, actor_id)
 SELECT 
     f.film_id,
@@ -97,8 +116,8 @@ SELECT
 FROM 
     film f
 JOIN
-    actor a ON (LOWER(a.last_name) IN ('carrey', 'schwartz') 
-               AND LOWER(a.first_name) IN ('jim', 'ben'))
+    actor a ON (a.last_name IN (UPPER('Carrey'), UPPER('Schwartz')) 
+               AND a.first_name IN (UPPER('Jim'), UPPER('Ben')))
 WHERE 
     f.title = UPPER('Sonic the Hedgehog 3')
     AND NOT EXISTS (
@@ -106,6 +125,16 @@ WHERE
         WHERE fa.film_id = f.film_id AND fa.actor_id = a.actor_id
 )
 RETURNING *;
+
+
+INSERT INTO actor (first_name, last_name)
+SELECT UPPER('Fred'), UPPER('Hechinger') 
+WHERE NOT EXISTS (SELECT 1 FROM actor WHERE first_name = UPPER('Fred') AND last_name = UPPER('Hechinger'));
+
+INSERT INTO actor (first_name, last_name)
+SELECT UPPER('Ariana'), UPPER('Debose') 
+WHERE NOT EXISTS (SELECT 1 FROM actor WHERE first_name = UPPER('Ariana') AND last_name = UPPER('Debose'));
+
 INSERT INTO film_actor (film_id, actor_id)
 SELECT 
     f.film_id,
@@ -113,10 +142,10 @@ SELECT
 FROM 
     film f
 JOIN
-    actor a ON (LOWER(a.last_name) IN ('hechinger', 'debose') 
-               AND LOWER(a.first_name) IN ('fred', 'ariana'))
+    actor a ON (a.last_name IN (UPPER('Hechinger'), UPPER('Debose')) 
+               AND a.first_name IN (UPPER('Fred'), UPPER('Ariana')))
 WHERE 
-    f.title = UPPER('Kraven the hunter')
+    f.title = UPPER('Kraven the Hunter')
     AND NOT EXISTS (
         SELECT 1 FROM film_actor fa
         WHERE fa.film_id = f.film_id AND fa.actor_id = a.actor_id
@@ -129,7 +158,7 @@ RETURNING *;
 WITH updated_customer AS (
     UPDATE customer 
     SET 
-        store_id = 2,
+        store_id = (SELECT store_id FROM store ORDER BY random() LIMIT 1),
         first_name = UPPER('Rendijs'),
         last_name = UPPER('Serna'),
         email = UPPER('rendijsserna@gmail.com'),
@@ -169,9 +198,9 @@ WITH created_rental AS (
     SELECT 
         i.inventory_id,
         c.customer_id,
-        '2017-03-20 00:02:21.000 +0300', --should be taken ONLY ON the rent date AND NOT updated again
-        '2017-03-25 00:02:21.000 +0300', -- should be updated ON RETURN date INSTEAD 
-        2 -- should be taken FROM employee card OR smthin
+        '2017-03-20 00:02:21.000 +0300',
+        '2017-03-25 00:02:21.000 +0300',
+        (SELECT staff_id FROM staff WHERE store_id = i.store_id ORDER BY RANDOM() LIMIT 1)
     FROM 
         inventory i
         INNER JOIN film f ON f.film_id = i.film_id
@@ -180,7 +209,6 @@ WITH created_rental AS (
         (f.title = UPPER('Deadpool & Wolverine') OR 
          f.title = UPPER('Sonic the Hedgehog 3') OR 
          f.title = UPPER('Kraven the Hunter'))
-        AND i.store_id = 2
         AND c.first_name = UPPER('rendijs') 
         AND c.last_name = UPPER('serna')
         AND NOT EXISTS (
@@ -204,4 +232,5 @@ FROM
     JOIN film f ON i.film_id = f.film_id
 RETURNING *;
 
+COMMIT;
 
