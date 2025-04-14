@@ -1,8 +1,10 @@
 CREATE DATABASE Social_media;
 
+-- Create schema
+CREATE SCHEMA IF NOT EXISTS social_media;
 
 -- UNIQUE for email and username so i can select id based on that
-CREATE TABLE Users (
+CREATE TABLE IF NOT EXISTS Users (
     User_id SERIAL PRIMARY KEY,
     Username text NOT NULL UNIQUE,
     Gender text CHECK (Gender IN ('male', 'female', 'non-binary', 'prefer-not-to-say')),
@@ -16,7 +18,7 @@ CREATE TABLE Users (
 
 -- groups table
 -- UNIQUE for group name for the same reason
-CREATE TABLE Groups (
+CREATE TABLE IF NOT EXISTS Groups (
     Group_id SERIAL PRIMARY KEY,
     Group_name text NOT NULL UNIQUE,
     Group_description text,
@@ -26,7 +28,7 @@ CREATE TABLE Groups (
 );
 
 -- group_Members table
-CREATE TABLE Group_Members (
+CREATE TABLE IF NOT EXISTS Group_Members (
     Group_member_id SERIAL PRIMARY KEY,
     Group_id bigint NOT NULL,
     User_id bigint NOT NULL,
@@ -38,7 +40,7 @@ CREATE TABLE Group_Members (
 );
 
 -- posts table
-CREATE TABLE Posts (
+CREATE TABLE IF NOT EXISTS Posts (
     Post_id SERIAL PRIMARY KEY,
     User_id bigint NOT NULL,
     Post_title text NOT NULL,
@@ -53,7 +55,7 @@ CREATE TABLE Posts (
 );
 
 -- comments table
-CREATE TABLE Comments (
+CREATE TABLE IF NOT EXISTS Comments (
     Comment_id SERIAL PRIMARY KEY,
     Post_id bigint NOT NULL,
     User_id bigint NOT NULL,
@@ -69,7 +71,7 @@ CREATE TABLE Comments (
 );
 
 -- user_relationships table
-CREATE TABLE User_relationships (
+CREATE TABLE IF NOT EXISTS User_relationships (
     Relationship_id SERIAL PRIMARY KEY,
     Followed_id bigint NOT NULL,
     Follower_id bigint NOT NULL,
@@ -80,7 +82,7 @@ CREATE TABLE User_relationships (
 );
 
 -- notifications table
-CREATE TABLE Notifications (
+CREATE TABLE IF NOT EXISTS Notifications (
     Notification_id SERIAL PRIMARY KEY,
     User_id bigint NOT NULL,
     Notification_type text NOT NULL,
@@ -91,7 +93,7 @@ CREATE TABLE Notifications (
 );
 
 -- messages table
-CREATE TABLE Messages (
+CREATE TABLE IF NOT EXISTS Messages (
     Message_id SERIAL PRIMARY KEY,
     Sender_id bigint NOT NULL,
     Received_id bigint NOT NULL,
@@ -103,7 +105,7 @@ CREATE TABLE Messages (
 );
 
 -- user_post_data table
-CREATE TABLE User_post_data (
+CREATE TABLE IF NOT EXISTS User_post_data (
     Post_id bigint NOT NULL,
     User_id bigint NOT NULL,
     Is_Like boolean DEFAULT FALSE,
@@ -114,17 +116,16 @@ CREATE TABLE User_post_data (
 );
 
 -- user_comment_data table
-CREATE TABLE User_comment_data (
+CREATE TABLE IF NOT EXISTS User_comment_data (
     Comment_id bigint NOT NULL,
     User_id bigint NOT NULL,
     Is_Like boolean DEFAULT FALSE,
     Is_dislike boolean DEFAULT FALSE,
-    Is_shared boolean DEFAULT FALSE, 
+    Is_shared boolean DEFAULT FALSE,
     PRIMARY KEY (Comment_id, User_id),
     FOREIGN KEY (Comment_id) REFERENCES Comments(Comment_id),
     FOREIGN KEY (User_id) REFERENCES Users(User_id)
 );
-
 
 --  insert users 
 INSERT INTO Users (Username, Gender, Email, Password, Is_moderator, User_description)
@@ -216,60 +217,34 @@ SELECT
     (SELECT User_id FROM Users WHERE Username = UPPER('jane_smith')), FALSE, FALSE, TRUE
 ON CONFLICT (Comment_id, User_id) DO NOTHING;
 
--- 
 -- insert sample data into Messages table
-INSERT INTO Messages (Sender_id, Received_id, Message_content )
+INSERT INTO Messages (Sender_id, Received_id, Message_content)
 VALUES
     ((SELECT User_id FROM Users WHERE Username = UPPER('john_doe')),
     (SELECT User_id FROM Users WHERE Username = UPPER('jane_smith')),
     'Hey Jane, check out my latest post!'),
-    
     ((SELECT User_id FROM Users WHERE Username = UPPER('jane_smith')),
     (SELECT User_id FROM Users WHERE Username = UPPER('john_doe')),
-    'Thanks for sharing, John! I’ll take a look.');
-    
+    'Thanks for sharing, John! I''ll take a look.')
+ON CONFLICT DO NOTHING;
+
 -- Add a not null 'record_ts' field to each table using ALTER TABLE statements, set the default value to current_date, 
-ALTER TABLE Users ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Users ADD COLUMN IF NOT EXISTS  record_ts DATE NOT NULL DEFAULT CURRENT_DATE ;
 
-ALTER TABLE Groups ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Groups ADD COLUMN IF NOT EXISTS record_ts DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE Group_Members ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Group_Members ADD COLUMN  IF NOT EXISTS record_ts DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE Posts ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Posts ADD COLUMN record_ts IF NOT EXISTS DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE Comments ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Comments ADD COLUMN record_ts IF NOT EXISTS DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE User_relationships ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE User_relationships ADD COLUMN IF NOT EXISTS record_ts  DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE Notifications ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Notifications ADD COLUMN IF NOT EXISTS record_ts DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE Messages ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE Messages ADD COLUMN IF NOT EXISTS record_ts DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE User_post_data ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE User_post_data ADD COLUMN IF NOT EXISTS record_ts DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
 
-ALTER TABLE User_comment_data ADD COLUMN record_ts DATE NOT NULL DEFAULT CURRENT_DATE;
-
--- and check to make sure the value has been set for the existing rows.
-UPDATE Users SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE Groups SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE Group_Members SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE Posts SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE Comments SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE User_relationships SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE Notifications SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE Messages SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE User_post_data SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-UPDATE User_comment_data SET record_ts = CURRENT_DATE WHERE record_ts IS NULL;
-
-
-  
-
+ALTER TABLE User_comment_data ADD COLUMN IF NOT EXISTS record_ts DATE NOT NULL DEFAULT CURRENT_DATE ON CONFLICT DO NOTHING;
