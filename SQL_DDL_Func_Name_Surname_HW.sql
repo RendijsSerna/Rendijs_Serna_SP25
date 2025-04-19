@@ -4,12 +4,12 @@ SELECT
     c.name AS category,
     SUM(p.amount) AS total_sales_revenue
 FROM
-    payment p
-    INNER JOIN rental r ON p.rental_id = r.rental_id
-    INNER JOIN inventory i ON r.inventory_id = i.inventory_id
-    INNER JOIN film f ON i.film_id = f.film_id
-    INNER JOIN film_category fc ON f.film_id = fc.film_id
-    INNER JOIN category c ON fc.category_id = c.category_id
+    public.payment p
+    INNER JOIN public.rental r ON p.rental_id = r.rental_id
+    INNER JOIN public.inventory i ON r.inventory_id = i.inventory_id
+    INNER JOIN public.film f ON i.film_id = f.film_id
+    INNER JOIN public.film_category fc ON f.film_id = fc.film_id
+    INNER JOIN public.category c ON fc.category_id = c.category_id
 WHERE
     DATE_PART('year', p.payment_date) = DATE_PART('year', CURRENT_DATE) -- test CASE DATE '2017-01-31'
     AND DATE_PART('quarter', p.payment_date) = DATE_PART('quarter', CURRENT_DATE)
@@ -35,12 +35,12 @@ BEGIN
         c.name AS category,  
         SUM(p.amount) total_sales_revenue  
     FROM
-        payment p
-        INNER JOIN rental r ON p.rental_id = r.rental_id
-        INNER JOIN inventory i ON r.inventory_id = i.inventory_id
-        INNER JOIN film f ON i.film_id = f.film_id
-        INNER JOIN film_category fc ON f.film_id = fc.film_id
-        INNER JOIN category c ON fc.category_id = c.category_id
+        public.payment p
+        INNER JOIN public.rental r ON p.rental_id = r.rental_id
+        INNER JOIN public.inventory i ON r.inventory_id = i.inventory_id
+        INNER JOIN public.film f ON i.film_id = f.film_id
+        INNER JOIN public.film_category fc ON f.film_id = fc.film_id
+        INNER JOIN public.category c ON fc.category_id = c.category_id
     WHERE
         DATE_PART('year', p.payment_date) = DATE_PART('year', reference_date) 
         AND DATE_PART('quarter', p.payment_date) = DATE_PART('quarter', reference_date)
@@ -77,24 +77,24 @@ BEGIN
     RETURN QUERY
     WITH country_rentals AS (
         SELECT
-            co.country::TEXT,
-            f.title::TEXT,
-            f.rating::TEXT,
-            l.name::TEXT AS language,
+            UPPER(co.country::TEXT) AS country,
+            UPPER(f.title::TEXT) AS title,
+            UPPER(f.rating::TEXT) AS rating,
+            UPPER(l.name::TEXT) AS language,
             f.length::INTEGER,
             f.release_year::TEXT,
             COUNT(r.rental_id) AS rental_count
         FROM
-            country co
-            INNER JOIN city ci ON co.country_id = ci.country_id
-            INNER JOIN address a ON ci.city_id = a.city_id
-            INNER JOIN customer cu ON a.address_id = cu.address_id
-            INNER JOIN rental r ON cu.customer_id = r.customer_id
-            INNER JOIN inventory i ON r.inventory_id = i.inventory_id
-            INNER JOIN film f ON i.film_id = f.film_id
-            INNER JOIN language l ON f.language_id = l.language_id
+            public.country co
+            INNER JOIN public.city ci ON co.country_id = ci.country_id
+            INNER JOIN public.address a ON ci.city_id = a.city_id
+            INNER JOIN public.customer cu ON a.address_id = cu.address_id
+            INNER JOIN public.rental r ON cu.customer_id = r.customer_id
+            INNER JOIN public.inventory i ON r.inventory_id = i.inventory_id
+            INNER JOIN public.film f ON i.film_id = f.film_id
+            INNER JOIN public.language l ON f.language_id = l.language_id
         WHERE
-            co.country = ANY(input_countries)
+            UPPER(co.country) = ANY(ARRAY(SELECT UPPER(unnest(input_countries))))
         GROUP BY
             co.country, f.film_id, f.title, f.rating, l.name, f.length, f.release_year
     )
@@ -129,16 +129,16 @@ BEGIN
     RETURN QUERY
     WITH distinct_results AS (
         SELECT DISTINCT ON (f.title)
-            f.title::TEXT AS film_title,
-            l.name::TEXT AS language,
-            c.first_name || ' ' || c.last_name::TEXT AS customer_name,
+            UPPER(f.title::TEXT) AS film_title,
+            UPPER(l.name::TEXT) AS language,
+            UPPER(c.first_name || ' ' || c.last_name::TEXT) AS customer_name,
             r.rental_date::DATE
         FROM
-            film f
-        INNER JOIN inventory i ON f.film_id = i.film_id
-        INNER JOIN rental r ON i.inventory_id = r.inventory_id
-        INNER JOIN customer c ON r.customer_id = c.customer_id
-        INNER JOIN language l ON f.language_id = l.language_id
+            public.film f
+        INNER JOIN public.inventory i ON f.film_id = i.film_id
+        INNER JOIN public.rental r ON i.inventory_id = r.inventory_id
+        INNER JOIN public.customer c ON r.customer_id = c.customer_id
+        INNER JOIN public.language l ON f.language_id = l.language_id
         WHERE
             f.title LIKE UPPER(input_text)
             AND r.return_date IS NOT NULL
@@ -152,10 +152,11 @@ BEGIN
     FROM distinct_results dr;
 
     IF NOT FOUND THEN
-        RAISE NOTICE 'No movies found for title: ', input_text;
+        RAISE NOTICE 'No movies found for title: %', input_text;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
+
 
 
 -- test case
@@ -167,27 +168,34 @@ SELECT * FROM films_in_stock_by_title('%asdasdasdasdadas%');
 -- Create a procedure language function called 'new_movie' that takes a movie title as a parameter and inserts a new movie with the given title in the film table. The function should generate a new unique film ID, set the rental rate to 4.99, the rental duration to three days, the replacement cost to 19.99. The release year and language are optional and by default should be current year and Klingon respectively. The function should also verify that the language exists in the 'language' table. Then, ensure that no such function has been created before; if so, replace it.
 -- im very confused by this task
 -- why do i need to generate a new id if film_id field is serial?
-CREATE OR REPLACE FUNCTION new_movie(new_movie_title text)
-RETURNS void AS $$
+CREATE OR REPLACE FUNCTION new_movie(
+    new_movie_title TEXT,
+    release_year INTEGER DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
+    language_name TEXT DEFAULT 'Klingon'
+)
+RETURNS VOID AS $$
 DECLARE
-    release_year INTEGER;
     default_language_id INTEGER;
-    movie_id INTEGER;
 BEGIN
-    release_year := EXTRACT(YEAR FROM CURRENT_DATE);
-    default_language_id := (SELECT language_id FROM language WHERE name = ('Klingon'));
-    movie_id := (SELECT film_id FROM film f WHERE f.title = new_movie_title);
+    -- Check if the language exists, if not, insert it
+    SELECT language_id INTO default_language_id
+    FROM public.language
+    WHERE UPPER(name) = UPPER(language_name);
 
-    IF default_language_id IS NULL THEN
-        RAISE EXCEPTION 'Default language "English" does not exist in the language table.';
+    IF NOT FOUND THEN
+        INSERT INTO public.language (name)
+        VALUES (UPPER(language_name))
+        RETURNING language_id INTO default_language_id;
     END IF;
 
-    IF movie_id IS NOT NULL THEN
+    -- Check if the movie already exists
+    IF EXISTS (SELECT 1 FROM public.film f WHERE UPPER(f.title) = UPPER(new_movie_title)) THEN
         RAISE EXCEPTION 'Movie already exists.';
     END IF;
 
-    INSERT INTO film (title, release_year, language_id, rental_duration, rental_rate, replacement_cost)
-    VALUES (new_movie_title, release_year, default_language_id, 3, 4.99, 19.99);
+    -- Insert the new movie
+    INSERT INTO public.film (title, release_year, language_id, rental_duration, rental_rate, replacement_cost)
+    VALUES (UPPER(new_movie_title), release_year, default_language_id, 3, 4.99, 19.99);
 END;
 $$ LANGUAGE plpgsql;
 
