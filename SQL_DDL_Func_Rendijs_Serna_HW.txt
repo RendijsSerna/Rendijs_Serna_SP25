@@ -1,0 +1,89 @@
+--What operations do the following functions perform:
+-- film_in_stock,
+-- checks how many copies of a specific film are available in stock at a particular store uses inventory_in_stock as a true / false 
+
+-- film_not_in_stock,
+-- checks how many copies are not available uses same inventory_in_stock only with NOT 
+
+-- inventory_in_stock,
+-- checks if there are any available inventory rows returns true/false
+
+
+-- get_customer_balance,
+-- calculates how much the customer has to pay for rental and overfees
+
+
+--inventory_held_by_customer,
+-- checks what customers hold certain inventory 
+
+-- rewards_report,
+-- generates report for all customers who qualify for rewards program
+
+
+-- last_day? You can find these functions in dvd_rental database.
+--calculates the last day of the month for a given timestamp with timezone
+
+--Is there any function that can potentially be removed from the dvd_rental codebase? If so, which one and why?
+-- film_in_stock and film_not_in_stock its the same function only difference being not
+
+
+--* The ‘get_customer_balance’ function describes the business requirements for calculating the client balance. Unfortunately, not all of them are implemented in this function. Try to change function using the requirements from the comments.
+-- 3) IF A FILM IS MORE THAN RENTAL_DURATION * 2 OVERDUE, CHARGE THE REPLACEMENT_COST
+CREATE OR REPLACE FUNCTION public.get_customer_balance(p_customer_id integer, p_effective_date timestamp with time zone)
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_rentfees DECIMAL(5,2);
+    v_overfees DECIMAL(5,2); 
+    v_payments DECIMAL(5,2);
+    v_rental_duration INTERVAL;
+BEGIN
+    -- 1) Rental fees for all previous rentals
+    SELECT COALESCE(SUM(film.rental_rate),0) INTO v_rentfees
+    FROM film, inventory, rental
+    WHERE film.film_id = inventory.film_id
+      AND inventory.inventory_id = rental.inventory_id
+      AND rental.rental_date <= p_effective_date
+      AND rental.customer_id = p_customer_id;
+
+    SELECT COALESCE(SUM(
+        CASE 
+            --  If rental is more than 2x rental duration overdue, charge replacement cost
+            WHEN (rental.return_date - rental.rental_date) > (film.rental_duration * 2 * '1 day'::interval) THEN
+                film.replacement_cost
+            --  Otherwise charge $1 per day overdue
+            WHEN (rental.return_date - rental.rental_date) > (film.rental_duration * '1 day'::interval) THEN
+                EXTRACT(epoch FROM ((rental.return_date - rental.rental_date) - (film.rental_duration * '1 day'::interval)))::INTEGER / 86400.0
+            ELSE 
+                0
+        END), 0) 
+    INTO v_overfees
+    FROM rental, inventory, film
+    WHERE film.film_id = inventory.film_id
+      AND inventory.inventory_id = rental.inventory_id
+      AND rental.rental_date <= p_effective_date
+      AND rental.return_date IS NOT NULL -- Only charged for returned rentals
+      AND rental.customer_id = p_customer_id;
+
+    SELECT COALESCE(SUM(payment.amount),0) INTO v_payments
+    FROM payment
+    WHERE payment.payment_date <= p_effective_date
+    AND payment.customer_id = p_customer_id;
+
+    RETURN v_rentfees + v_overfees - v_payments;
+END
+$function$;
+
+
+--* How do ‘group_concat’ and ‘_group_concat’ functions work? (database creation script might help) Where are they used?
+-- they take input fields and combine multiple strings into a single string where each is sepperated by a comma 
+-- used in actor_info film_list and nicer_but_slower_film_list
+
+--* What does ‘last_updated’ function do? Where is it used?
+-- updates field last_updated at any given table works on trigger based on table row changes
+
+--* What is tmpSQL variable for in ‘rewards_report’ function? Can this function be recreated without EXECUTE statement and dynamic SQL? Why?
+-- sql query construct  for insert 
+-- it can by using subquery and selecting customers based on the constraints
+
