@@ -1,0 +1,12 @@
+--How can one restrict access to certain columns of a database table?
+-- Column-level security possible to grant revoke certain rows for each user seperately
+
+--What is the difference between user identification and user authentication?
+-- identification establishes the user's identity using account names or user IDs,
+-- authentication verifies it using passwords, biometrics, or security tokens
+
+--What are the recommended authentication protocols for PostgreSQL?
+-- md5 hash for password
+
+--What is proxy authentication in PostgreSQL and what is it for? Why does it make the previously discussed role-based access control easier to implement?
+-- the ability to give a certain user priviledges in different databases without the need to create a different account for said user
