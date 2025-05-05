@@ -9,7 +9,7 @@ GRANT SELECT ON customer TO rentaluser;
 SELECT * FROM customer;
 
 --Create a new user group called "rental" and add "rentaluser" to the group. 
-CREATE ROLE rental;
+CREATE GROUP  rental;
 
 GRANT rental TO rentaluser;
 
@@ -48,37 +48,50 @@ RETURNING rental_id, customer_id, staff_id, inventory_id, rental_date;
 
 CREATE ROLE client_ADAM_GOOCH;
 
--- creates extra table to take id from
-CREATE TABLE IF NOT EXISTS public.user_role_mapping (
-    role_name TEXT PRIMARY KEY,
-    customer_id INT
-);
+WITH customer_cte AS (
+    SELECT customer_id
+    FROM public.customer
+    WHERE UPPER(CONCAT('client_', first_name, '_', last_name)) = UPPER(CURRENT_USER)
+)
 
--- insert the curent user into it ( could be done automatically from function and take id from customers based on first last name)
-INSERT INTO public.user_role_mapping (role_name, customer_id)
-VALUES ('client_ADAM_GOOCH', 367)
-ON CONFLICT (role_name) DO NOTHING;
 
 -- give permisions
+GRANT SELECT ON public.customer TO client_ADAM_GOOCH;
 GRANT SELECT ON public.rental TO client_ADAM_GOOCH;
 GRANT SELECT ON public.payment TO client_ADAM_GOOCH;
-GRANT SELECT ON public.user_role_mapping TO client_ADAM_GOOCH;
+
 
 
 ALTER TABLE rental ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment ENABLE ROW LEVEL SECURITY;
 
 -- Policies using the extracted name and surname
+
+
 CREATE POLICY rental_policy
 ON rental
-USING (customer_id = (SELECT customer_id FROM public.user_role_mapping  WHERE UPPER(role_name) = UPPER(CURRENT_USER)));
-
-DROP POLICY IF EXISTS rental_policy ON rental;
-DROP POLICY IF EXISTS payment_policy ON payment;
+USING (
+    customer_id = (
+        SELECT customer_id
+        FROM public.customer
+        WHERE UPPER(CONCAT('client_', first_name, '_', last_name)) = UPPER(CURRENT_USER)
+    )
+);
 
 CREATE POLICY payment_policy
 ON payment
-USING (customer_id = (SELECT customer_id FROM public.user_role_mapping  WHERE UPPER(role_name) = UPPER(CURRENT_USER)));
+USING (
+    customer_id = (
+        SELECT customer_id
+        FROM public.customer
+        WHERE UPPER(CONCAT('client_', first_name, '_', last_name)) = UPPER(CURRENT_USER)
+    )
+);
+
+
+
+DROP POLICY IF EXISTS rental_policy ON rental;
+DROP POLICY IF EXISTS payment_policy ON payment;
 
 -- Switch to the customer user to test access
 SET ROLE client_ADAM_GOOCH;
