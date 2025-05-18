@@ -14,7 +14,7 @@ INNER JOIN customers c ON c.cust_id = s.cust_id
 INNER JOIN countries co ON co.country_id = c.country_id
 INNER JOIN channels ch ON ch.channel_id = s.channel_id
 WHERE co.country_region IN ('Americas', 'Asia', 'Europe')
-AND EXTRACT(YEAR FROM s.time_id) >= 1999
+AND EXTRACT(YEAR FROM s.time_id) >= 1998
 AND EXTRACT(YEAR FROM s.time_id) < 2002
 GROUP BY 
     EXTRACT(YEAR FROM s.time_id),
@@ -49,6 +49,7 @@ SELECT
     last_year_percentage_by_channel,
     ROUND(percentage_change, 2) AS difference_between_years
 FROM yearly_comparison
+WHERE  YEAR IN (1999,2000,2001)
 ORDER BY 
     country_region ASC,
     YEAR ASC,
@@ -127,8 +128,23 @@ SELECT
 FROM sh.daily_costs
 ORDER BY time_id;
 
--- i cant figure out how to use group atleast for these tables
-
+-- get quarterly sales with comparison to previous N quarters
+-- can be used for identifying seasonal patterns even with missing data periods
+SELECT
+    EXTRACT(YEAR FROM time_id) AS sales_year,
+    EXTRACT(QUARTER FROM time_id) AS sales_quarter,
+    SUM(amount_sold) AS quarterly_sales,
+    AVG(SUM(amount_sold)) OVER (
+        ORDER BY EXTRACT(YEAR FROM time_id), EXTRACT(QUARTER FROM time_id)
+        GROUPS BETWEEN 1 PRECEDING AND 1 PRECEDING
+    ) AS prev_quarter_sales,
+    SUM(amount_sold) - AVG(SUM(amount_sold)) OVER (
+        ORDER BY EXTRACT(YEAR FROM time_id), EXTRACT(QUARTER FROM time_id)
+        GROUPS BETWEEN 1 PRECEDING AND 1 PRECEDING
+    ) AS quarter_to_quarter_diff
+FROM sh.sales
+GROUP BY EXTRACT(YEAR FROM time_id), EXTRACT(QUARTER FROM time_id)
+ORDER BY sales_year, sales_quarter;
 
 
 
