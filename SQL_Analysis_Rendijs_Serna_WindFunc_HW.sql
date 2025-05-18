@@ -35,14 +35,11 @@ RankedCustomers AS (
 )
 -- select the data + get kpi
 SELECT
-	rc.channel_id,
-    (SELECT channel_desc FROM channels ch WHERE rc.channel_id = ch.channel_id ),
-    rc.cust_id,
-    (SELECT cust_first_name FROM customers c WHERE rc.cust_id = c.cust_id ),
-    (SELECT cust_last_name FROM customers c WHERE rc.cust_id = c.cust_id ),
+    (SELECT channel_desc FROM sh.channels ch WHERE rc.channel_id = ch.channel_id ),
+    (SELECT cust_first_name FROM sh.customers c WHERE rc.cust_id = c.cust_id ),
+    (SELECT cust_last_name FROM sh.customers c WHERE rc.cust_id = c.cust_id ),
     ROUND(total_sales, 2) AS total_sales,
     CONCAT(ROUND((total_sales / channel_total_sales) * 100, 4), '%') AS sales_percentage
-    
 FROM
     RankedCustomers rc
 WHERE
@@ -86,16 +83,10 @@ quarterly_totals AS (
 )
 -- get the % of those sales from total
 SELECT
-    qt.prod_id,
     p.prod_name,
     ROUND(qt.q1_total, 2) AS q1_sales,
-    CONCAT(ROUND((qt.q1_total / qt.year_total) * 100, 2), '%') AS q1_percentage,
     ROUND(qt.q2_total, 2) AS q2_sales,
-    CONCAT(ROUND((qt.q2_total / qt.year_total) * 100, 2), '%') AS q2_percentage,
-    ROUND(qt.q3_total, 2) AS q3_sales,
-    CONCAT(ROUND((qt.q3_total / qt.year_total) * 100, 2), '%') AS q3_percentage,
     ROUND(qt.q4_total, 2) AS q4_sales,
-    CONCAT(ROUND((qt.q4_total / qt.year_total) * 100, 2), '%') AS q4_percentage,
     ROUND(qt.year_total, 2) AS year_sum
 FROM
     quarterly_totals qt
@@ -115,7 +106,7 @@ WITH YearlySales AS (
         EXTRACT(YEAR FROM sales.time_id) AS sale_year,
         SUM(sales.amount_sold) AS total_sales
     FROM
-        sales
+        sh.sales
     WHERE
         EXTRACT(YEAR FROM sales.time_id) IN (1998, 1999, 2001)
     GROUP BY
@@ -126,15 +117,10 @@ CustomerData AS (
     SELECT
         c.cust_id,
         c.cust_first_name,
-        c.cust_last_name,
-        c.cust_city,
-        c.cust_state_province,
-        co.country_name,
-        c.cust_postal_code,
-        c.cust_income_level
+        c.cust_last_name
     FROM
-        customers c
-    INNER JOIN countries co ON co.country_id  = c.country_id
+        sh.customers c
+    INNER JOIN sh.countries co ON co.country_id  = c.country_id
     WHERE
         c.cust_id IN (SELECT DISTINCT cust_id FROM YearlySales)
 ),
@@ -148,68 +134,70 @@ RankedCustomers AS (
         RANK() OVER (PARTITION BY ys.channel_id, ys.sale_year ORDER BY ys.total_sales DESC) AS customer_rank
     FROM
         YearlySales ys
+),
+-- get only those customers who are in top 300 in all three years
+QualifiedCustomers AS (
+    SELECT
+        cust_id
+    FROM
+        RankedCustomers
+    WHERE
+        customer_rank <= 300
+    GROUP BY
+        cust_id
+    HAVING
+        COUNT(DISTINCT sale_year) = 3
 )
--- select data for top customers
+-- select data for top customers who qualified
 SELECT
-    (SELECT channel_desc FROM channels ch WHERE rc.channel_id = ch.channel_id) AS channel_name,
+    (SELECT channel_desc FROM sh.channels ch WHERE rc.channel_id = ch.channel_id) AS channel_name,
     rc.cust_id,
     cd.cust_first_name,
     cd.cust_last_name,
-    cd.cust_city,
-    cd.cust_state_province AS cust_state,
-    cd.country_name AS country,
-    cd.cust_postal_code AS cust_zip,
-    cd.cust_income_level AS income_level,
-    rc.sale_year,
     ROUND(rc.total_sales, 2) AS total_sales
 FROM
     RankedCustomers rc
 JOIN
     CustomerData cd ON rc.cust_id = cd.cust_id
+JOIN
+    QualifiedCustomers qc ON rc.cust_id = qc.cust_id
 WHERE
     rc.customer_rank <= 300
 ORDER BY
     rc.channel_id, rc.sale_year, rc.total_sales DESC;
 
+
 --Create a query to generate a sales report for January 2000, February 2000, and March 2000 specifically for the Europe and Americas regions.
 -- gets sales per subregion / date
 WITH SalesData AS (
     SELECT
-        s.prod_id,
-        EXTRACT(YEAR FROM s.time_id) AS sale_year,
-        EXTRACT(MONTH FROM s.time_id) AS sale_month,
+        TO_CHAR(s.time_id, 'YYYY-MM') AS sale_month,
+        p.prod_category AS prod_category,
         SUM(CASE WHEN co.country_subregion LIKE '%Europe%' THEN s.amount_sold ELSE 0 END) AS europe_sales,
-        SUM(CASE WHEN co.country_subregion LIKE '%America%' THEN s.amount_sold ELSE 0 END) AS america_sales,
-        SUM(s.amount_sold) AS total_sales_raw
+        SUM(CASE WHEN co.country_subregion LIKE '%America%' THEN s.amount_sold ELSE 0 END) AS america_sales
     FROM
-        sales s
-    INNER JOIN customers c ON c.cust_id = s.cust_id
-    INNER JOIN countries co ON co.country_id = c.country_id
+        sh.sales s
+    JOIN sh.customers c ON s.cust_id = c.cust_id
+    JOIN sh.countries co ON c.country_id = co.country_id
+    JOIN sh.products p ON s.prod_id = p.prod_id
     WHERE
-    -- 
         (co.country_subregion LIKE '%Europe%' OR co.country_subregion LIKE '%America%')
         AND EXTRACT(YEAR FROM s.time_id) = 2000
         AND EXTRACT(MONTH FROM s.time_id) IN (1, 2, 3)
     GROUP BY
-        s.prod_id,
-        EXTRACT(YEAR FROM s.time_id),
-        EXTRACT(MONTH FROM s.time_id)
+        TO_CHAR(s.time_id, 'YYYY-MM'),
+        p.prod_category
 )
 -- selects data from cte
 SELECT
-    prod_id,
-    sale_year,
     sale_month,
+    prod_category,
     ROUND(europe_sales, 2) AS europe_sales,
-    ROUND(america_sales, 2) AS america_sales,
-    ROUND(europe_sales + america_sales, 2) AS total_sales,
-    CONCAT(ROUND(europe_sales * 100.0 / (europe_sales + america_sales), 2), '%') AS europe_percentage,
-    CONCAT(ROUND(america_sales * 100.0 / (europe_sales + america_sales), 2), '%') AS america_percentage
+    ROUND(america_sales, 2) AS america_sales
 FROM
     SalesData
 -- ignores cases when eu + us = 0
 WHERE europe_sales > 0 OR america_sales > 0
-
 ORDER BY
     sale_month,
-    total_sales DESC;
+    prod_category ASC;
