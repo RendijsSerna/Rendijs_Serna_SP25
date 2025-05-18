@@ -279,7 +279,7 @@ BEGIN
     ELSE
         -- insert new transaction
         INSERT INTO Agency.Transactions (property_id, client_id, agent_id, transaction_date, amount)
-        VALUES (v_property_id, v_client_id, v_agent_id, add_transaction.transaction_date, add_transaction.amount);
+        VALUES (v_property_id, v_client_id, v_agent_id, add_transaction.in_transaction_date, add_transaction.in_amount);
 
         -- success confirmation
         RAISE NOTICE 'New transaction added successfully.';
