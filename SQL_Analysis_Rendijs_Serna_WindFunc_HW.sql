@@ -86,6 +86,7 @@ SELECT
     p.prod_name,
     ROUND(qt.q1_total, 2) AS q1_sales,
     ROUND(qt.q2_total, 2) AS q2_sales,
+    ROUND(qt.q3_total, 2) AS q3_sales,
     ROUND(qt.q4_total, 2) AS q4_sales,
     ROUND(qt.year_total, 2) AS year_sum
 FROM
@@ -120,7 +121,6 @@ CustomerData AS (
         c.cust_last_name
     FROM
         sh.customers c
-    INNER JOIN sh.countries co ON co.country_id  = c.country_id
     WHERE
         c.cust_id IN (SELECT DISTINCT cust_id FROM YearlySales)
 ),
@@ -135,37 +135,50 @@ RankedCustomers AS (
     FROM
         YearlySales ys
 ),
--- get only those customers who are in top 300 in all three years
+-- get only those customers who are in top 300 in all three years (per channel)
 QualifiedCustomers AS (
     SELECT
+        channel_id,
         cust_id
     FROM
         RankedCustomers
     WHERE
         customer_rank <= 300
     GROUP BY
-        cust_id
+        channel_id, cust_id
     HAVING
         COUNT(DISTINCT sale_year) = 3
+),
+-- get total sales for 3 years for each qualified customer and channel
+FinalSales AS (
+    SELECT
+        rc.channel_id,
+        rc.cust_id,
+        SUM(rc.total_sales) AS total_sales
+    FROM
+        RankedCustomers rc
+    JOIN
+        QualifiedCustomers qc ON rc.cust_id = qc.cust_id AND rc.channel_id = qc.channel_id
+    WHERE
+        rc.customer_rank <= 300
+    GROUP BY
+        rc.channel_id, rc.cust_id
 )
 -- select data for top customers who qualified
 SELECT
-    (SELECT channel_desc FROM sh.channels ch WHERE rc.channel_id = ch.channel_id) AS channel_name,
-    rc.cust_id,
+    ch.channel_desc AS channel_name,
+    fs.cust_id,
     cd.cust_first_name,
     cd.cust_last_name,
-    ROUND(rc.total_sales, 2) AS total_sales
+    ROUND(fs.total_sales, 2) AS total_sales
 FROM
-    RankedCustomers rc
+    FinalSales fs
 JOIN
-    CustomerData cd ON rc.cust_id = cd.cust_id
+    sh.channels ch ON fs.channel_id = ch.channel_id
 JOIN
-    QualifiedCustomers qc ON rc.cust_id = qc.cust_id
-WHERE
-    rc.customer_rank <= 300
+    CustomerData cd ON fs.cust_id = cd.cust_id
 ORDER BY
-    rc.channel_id, rc.sale_year, rc.total_sales DESC;
-
+    ch.channel_desc, fs.total_sales DESC;
 
 --Create a query to generate a sales report for January 2000, February 2000, and March 2000 specifically for the Europe and Americas regions.
 -- gets sales per subregion / date
